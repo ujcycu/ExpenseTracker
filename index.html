@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>記帳系統</title>
+    <title>跨錢包批次記帳</title>
     <!-- 引入 Vue 3 CDN -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
@@ -189,18 +189,18 @@
 <body>
 
 <div id="app" class="container">
-    <h1>系統預算主控台</h1>
+    <h1>檢視帳務/資產</h1>
     
     <!-- 錢包狀態看板區 -->
     <div class="dashboard">
         <div class="card total_system">
-            <h3>系統總淨資產</h3>
+            <h3>系統總資產</h3>
             <div class="balance">${{ systemTotalBalance.toLocaleString() }}</div>
         </div>
 
         <div v-for="w in wallets" :key="w.id" :class="['card', w.type]">
             <h3>
-                <span v-if="w.parent_id !== null" class="sub-wallet-prefix">└── </span>
+                <span v-if="w.parent_id !== null" class="sub-wallet-prefix">- </span>
                 {{ w.name }} ({{ w.type.toUpperCase() }})
             </h3>
             <div class="balance">
@@ -212,9 +212,9 @@
         </div>
     </div>
     
-    <!-- 篩選器控制面板 -->
+    <!-- 篩選面板 -->
     <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-wrap: wrap;">
-        <strong>過濾條件：</strong>
+        <strong>篩選條件：</strong>
         
         <select v-model="filterType" @change="onFilterTypeChange" style="width: 130px;">
             <option value="all">所有未歸檔</option>
@@ -229,19 +229,19 @@
             <input type="date" v-model="customEnd" @change="validateAndFetch" style="width: 130px;">
         </div>
 
-        <!-- 錢包過濾下拉選單（數據源採用樹狀結構排序後的關聯陣列） -->
+        <!-- 錢包下拉選單 -->
         <select v-model="filterWallet" @change="fetchData" style="width: 180px;">
             <option :value="null">檢視所有錢包</option>
             <option v-for="w in wallets" :value="w.id">
-                {{ w.parent_id !== null ? ' └── ' : '' }}{{ w.name }}
+                {{ w.parent_id !== null ? ' - ' : '' }}{{ w.name }}
             </option>
         </select>
     </div>
 
     <!-- 工具列 -->
     <div class="toolbar">
-        <button class="btn" @click="addNewRow">新增流水帳行 (Excel 模式)</button>
-        <button class="btn btn-success" @click="submitBulkSave">全部儲存</button>
+        <button class="btn" @click="addNewRow">新增列</button>
+        <button class="btn btn-success" @click="submitBulkSave">批次儲存</button>
     </div>
 
     <!-- 批次編輯資料表 -->
@@ -297,7 +297,7 @@
                         <select v-model="r.from_wallet_id" :disabled="r.recon_status === 'matched' || r.type === 'income'">
                             <option :value="null">-- 無 --</option>
                             <option v-for="w in wallets" :value="w.id">
-                                {{ w.parent_id !== null ? ' └── ' : '' }}{{ w.name }}
+                                {{ w.parent_id !== null ? ' - ' : '' }}{{ w.name }}
                             </option>
                         </select>
                     </td>
@@ -307,7 +307,7 @@
                         <select v-model="r.to_wallet_id" :disabled="r.recon_status === 'matched' || r.type === 'expense'">
                             <option :value="null">-- 無 --</option>
                             <option v-for="w in wallets" :value="w.id">
-                                {{ w.parent_id !== null ? ' └── ' : '' }}{{ w.name }}
+                                {{ w.parent_id !== null ? ' - ' : '' }}{{ w.name }}
                             </option>
                         </select>
                     </td>
