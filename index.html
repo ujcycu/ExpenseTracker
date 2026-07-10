@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>極速隨打隨存記帳系統</title>
+    <title>記帳系統</title>
     <!-- 引入 Vue 3 CDN -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
@@ -54,8 +54,8 @@
         .card.total_system { border-left-color: #f1c40f; background: linear-gradient(145deg, #ffffff, #fffdf0); } 
         .card.cash         { border-left-color: #2ecc71; } 
         .card.bank         { border-left-color: #3498db; } 
-        .card.credit_card { border-left-color: #e67e22; } 
-        .card.loan        { border-left-color: #9b59b6; } 
+        .card.credit_card  { border-left-color: #e67e22; } 
+        .card.loan         { border-left-color: #9b59b6; } 
         
         .card h3 { 
             margin: 0 0 5px 0; 
@@ -145,13 +145,13 @@
         }
 
         /* ==========================================================================
-           5. 表格欄位寬度精準權重分配
+           5. 表格欄位寬度權重分配
            ========================================================================== */
         .col-status   { width: 95px; }  
         .col-date     { width: 150px; } 
         .col-type     { width: 105px; } 
         .col-amount   { width: 100px; } 
-        .col-wallet   { width: 140px; } /* 稍微加寬，容納子錢包縮排文字 */
+        .col-wallet   { width: 140px; } /* 預留寬度以容納子錢包縮排縮寫 */
         .col-category { width: 100px; } 
         .col-note     { width: auto; }  
         .col-action   { width: 80px; text-align: center; }
@@ -189,12 +189,12 @@
 <body>
 
 <div id="app" class="container">
-    <h1>📊 金融級快打記帳系統</h1>
+    <h1>系統預算主控台</h1>
     
-    <!-- 1. 上方錢包即時動態看板 -->
+    <!-- 錢包狀態看板區 -->
     <div class="dashboard">
         <div class="card total_system">
-            <h3>🌍 系統淨資產總計</h3>
+            <h3>系統總淨資產</h3>
             <div class="balance">${{ systemTotalBalance.toLocaleString() }}</div>
         </div>
 
@@ -207,20 +207,20 @@
                 ${{ (w.aggregated_balance !== undefined ? w.aggregated_balance : w.balance).toLocaleString() }}
             </div>
             <div v-if="w.parent_id === null && w.aggregated_balance !== undefined && w.aggregated_balance !== w.balance" class="own-balance-note">
-                (主戶自存: ${{ w.balance.toLocaleString() }})
+                (母帳戶獨立餘額: ${{ w.balance.toLocaleString() }})
             </div>
         </div>
     </div>
     
-    <!-- 篩選控制面板 -->
+    <!-- 篩選器控制面板 -->
     <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; gap: 15px; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); flex-wrap: wrap;">
-        <strong>🔍 篩選過濾：</strong>
+        <strong>過濾條件：</strong>
         
         <select v-model="filterType" @change="onFilterTypeChange" style="width: 130px;">
             <option value="all">所有未歸檔</option>
             <option value="7">最近 7 天</option>
             <option value="30">最近 30 天</option>
-            <option value="custom">📅 自訂日期區間</option>
+            <option value="custom">自訂日期區間</option>
         </select>
 
         <div v-if="filterType === 'custom'" style="display: flex; align-items: center; gap: 5px;">
@@ -229,22 +229,22 @@
             <input type="date" v-model="customEnd" @change="validateAndFetch" style="width: 130px;">
         </div>
 
-        <!-- 錢包過濾（使用重排後的精準樹狀清單） -->
+        <!-- 錢包過濾下拉選單（數據源採用樹狀結構排序後的關聯陣列） -->
         <select v-model="filterWallet" @change="fetchData" style="width: 180px;">
-            <option :value="null">👀 檢視所有錢包</option>
+            <option :value="null">檢視所有錢包</option>
             <option v-for="w in wallets" :value="w.id">
                 {{ w.parent_id !== null ? ' └── ' : '' }}{{ w.name }}
             </option>
         </select>
     </div>
 
-    <!-- 2. 操作工具列 -->
+    <!-- 工具列 -->
     <div class="toolbar">
-        <button class="btn" @click="addNewRow">➕ 新增一行 (Excel 流)</button>
-        <button class="btn btn-success" @click="submitBulkSave">💾 全部儲存 (送出驗證)</button>
+        <button class="btn" @click="addNewRow">新增流水帳行 (Excel 模式)</button>
+        <button class="btn btn-success" @click="submitBulkSave">全部儲存</button>
     </div>
 
-    <!-- 3. 下方主編輯表格 -->
+    <!-- 批次編輯資料表 -->
     <div class="table-container">
         <table>
             <thead>
@@ -253,8 +253,8 @@
                     <th class="col-status">狀態</th>
                     <th class="col-type">交易類型</th>
                     <th class="col-amount">金額</th>
-                    <th class="col-wallet">扣款錢包</th>
-                    <th class="col-wallet">流入錢包</th>
+                    <th class="col-wallet">轉出錢包</th>
+                    <th class="col-wallet">轉入錢包</th>
                     <th class="col-category">分類</th>
                     <th class="col-note">備註</th>
                     <th class="col-action">操作</th>
@@ -262,7 +262,7 @@
             </thead>
             <tbody>
                 <tr v-for="(r, index) in records" :key="index" :class="r.recon_status">
-                    <!-- 🎯 修正 1：相容後端不同的日期欄位名稱 -->
+                    <!-- 日期輸入控鍵：支持後端多型態欄位對齊 -->
                     <td>
                         <input type="date" v-model="r.date" :disabled="r.recon_status === 'matched'">
                     </td>
@@ -292,7 +292,7 @@
                         <input type="number" v-model.number="r.amount" :disabled="r.recon_status === 'matched'" placeholder="金額">
                     </td>
                     
-                    <!-- 🎯 修正 2：使用前端完美對齊的樹狀母子錢包選單 -->
+                    <!-- 轉出錢包選單（收入情境下禁用） -->
                     <td>
                         <select v-model="r.from_wallet_id" :disabled="r.recon_status === 'matched' || r.type === 'income'">
                             <option :value="null">-- 無 --</option>
@@ -302,6 +302,7 @@
                         </select>
                     </td>
                     
+                    <!-- 轉入錢包選單（支出情境下禁用） -->
                     <td>
                         <select v-model="r.to_wallet_id" :disabled="r.recon_status === 'matched' || r.type === 'expense'">
                             <option :value="null">-- 無 --</option>
@@ -321,189 +322,13 @@
                     
                     <td>
                         <button v-if="r.recon_status === 'unreconciled'" class="btn" style="background:#e74c3c; padding:4px 8px;" @click="removeRow(index)">刪除</button>
-                        <span v-else style="font-size: 12px; color: #95a5a6;">🔒 帳目鎖定</span>
+                        <span v-else style="font-size: 12px; color: #95a5a6;">🔒 已鎖定</span>
                     </td>
                 </tr>
             </tbody>
         </table>
     </div>
 </div>
-
-<script>
-    const { createApp, ref, onMounted } = Vue;
-
-    createApp({
-        setup() {
-            const wallets = ref([]);
-            const records = ref([]);
-            const systemTotalBalance = ref(0);
-            
-            const filterType = ref("all");   
-            const customStart = ref("");     
-            const customEnd = ref("");       
-            const filterWallet = ref(null);  
-            
-            const API_BASE = "http://127.0.0.1:8000/api";
-
-            // 🎯 核心演算法：將亂序的錢包重組成「母錢包緊跟著其子錢包」的精準樹狀陣列
-            const buildWalletTree = (rawWallets) => {
-                const parents = rawWallets.filter(w => w.parent_id === null);
-                const children = rawWallets.filter(w => w.parent_id !== null);
-                const sorted = [];
-
-                parents.forEach(p => {
-                    sorted.push(p); // 先放入母錢包
-                    // 找出所有親生子錢包，並緊跟在後
-                    const subWallets = children.filter(c => c.parent_id === p.id);
-                    sorted.push(...subWallets);
-                });
-
-                // 防呆防漏：如果有孤兒錢包（找不到 parent_id 的子錢包），依然撈回放最後
-                const orphanChildren = children.filter(c => !parents.some(p => p.id === c.parent_id));
-                sorted.push(...orphanChildren);
-
-                return sorted;
-            };
-
-            const fetchData = async () => {
-                try {
-                    // 1. 抓取錢包
-                    const resWallets = await fetch(`${API_BASE}/wallets`);
-                    const walletData = await resWallets.json();
-
-                    systemTotalBalance.value = walletData.total_system_balance || 0;
-                    
-                    // 🎯 修正點 2：將後端抓回來的錢包陣列，過一層樹狀排序
-                    wallets.value = buildWalletTree(walletData.wallets || []);
-
-                    // 2. 抓取紀錄
-                    let url = `${API_BASE}/records?`;
-                    if (filterType.value === 'custom') {
-                        if (customStart.value) url += `start_date=${customStart.value}&`;
-                        if (customEnd.value) url += `end_date=${customEnd.value}&`;
-                    } else if (filterType.value !== 'all') {
-                        url += `days=${filterType.value}&`;
-                    }
-                    if (filterWallet.value !== null) {
-                        url += `wallet_id=${filterWallet.value}&`;
-                    }
-
-                    const resRecords = await fetch(url);
-                    const rawRecords = await resRecords.json();
-
-                    // 🎯 針對資料表叫 date 的精準格式化防禦機制
-                    records.value = rawRecords.map(r => {
-                        let formattedDate = "";
-                        
-                        if (r.date) {
-                            // 如果後端丟過來的是物件或帶有 T 的時間字串 (如 2026-07-08T00:00:00)
-                            // 直接用字串切出前 10 個字元 YYYY-MM-DD
-                            const dateStr = String(r.date).trim();
-                            if (dateStr.includes("T")) {
-                                formattedDate = dateStr.split("T")[0];
-                            } else if (dateStr.includes(" ")) {
-                                formattedDate = dateStr.split(" ")[0];
-                            } else {
-                                formattedDate = dateStr; // 已經是 YYYY-MM-DD
-                            }
-                        }
-                        
-                        // 防呆：如果後端這筆資料真的不幸是 null 或空值，自動塞今天日期，絕對不讓 input 變空白
-                        if (!formattedDate || formattedDate === "null") {
-                            formattedDate = new Date().toISOString().split('T')[0];
-                        }
-
-                        return {
-                            ...r,
-                            date: formattedDate // 強制塞回安全、格式正確的字串
-                        };
-                    });
-
-                } catch (err) {
-                    console.error("前端同步資料失敗:", err);
-                }
-            };
-
-            const onFilterTypeChange = () => {
-                if (filterType.value === 'custom') {
-                    const today = new Date();
-                    const pastMonth = new Date();
-                    pastMonth.setDate(today.getDate() - 30);
-                    customEnd.value = today.toISOString().split('T')[0];
-                    customStart.value = pastMonth.toISOString().split('T')[0];
-                }
-                fetchData();
-            };
-
-            const validateAndFetch = () => {
-                if (!customStart.value || !customEnd.value) return;
-                const start = new Date(customStart.value);
-                const end = new Date(customEnd.value);
-                if (start > end) {
-                    alert("❌ 錯誤：開始日期不能大於結束日期！");
-                    customEnd.value = customStart.value;
-                    return;
-                }
-                fetchData();
-            };
-
-            const addNewRow = () => {
-                records.value.push({
-                    id: null,
-                    date: new Date().toISOString().split('T')[0], 
-                    type: "expense",
-                    amount: 0,
-                    category: "餐飲",
-                    note: "",
-                    from_wallet_id: null,
-                    to_wallet_id: null,
-                    recon_status: "unreconciled"
-                });
-            };
-
-            const removeRow = (index) => {
-                records.value.splice(index, 1);
-            };
-
-            const submitBulkSave = async () => {
-                try {
-                    const response = await fetch(`${API_BASE}/records/bulk-save`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(records.value)
-                    });
-                    const result = await response.json();
-                    if (response.ok) {
-                        alert(result.message);
-                        await fetchData(); 
-                    } else {
-                        alert(`【儲存失敗】\n原因：${result.detail}`);
-                    }
-                } catch (err) {
-                    alert("網路連線異常！");
-                }
-            };
-
-            onMounted(fetchData);
-
-            return {
-                wallets,
-                records,
-                systemTotalBalance,
-                filterType,
-                customStart,
-                customEnd,
-                filterWallet,
-                fetchData,
-                onFilterTypeChange,
-                validateAndFetch,
-                addNewRow,
-                removeRow,
-                submitBulkSave
-            };
-        }
-    }).mount('#app');
-</script>
-
+<script src="script.js"></script>
 </body>
 </html>
