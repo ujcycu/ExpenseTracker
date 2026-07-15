@@ -17,8 +17,8 @@ from datetime import date, timedelta
 DB_FILE = "accounting.db"
 
 app = FastAPI(
-    title="高效防呆記帳系統 API (升級版)",
-    description="支援動態母子錢包、錢包封存、類 Excel 批次編輯與 Excel 匯入匯出對帳核心",
+    title="記帳系統 API",
+    description="支援動態母子錢包、錢包封存、類 Excel 批次編輯與 Excel 匯入匯出對帳",
     version="1.1.0"
 )
 
@@ -49,7 +49,7 @@ class BulkRecordItem(BaseModel):
 class WalletCreateItem(BaseModel):
     name: str = Field(..., min_length=1, description="錢包名稱不能為空")
     type: str = Field(..., pattern="^(cash|bank|credit_card|loan)$", description="錢包類型")
-    parent_id: Optional[int] = Field(None, description="所屬母錢包 ID (若為子錢包則填寫)")
+    parent_id: Optional[int] = Field(None, description="所屬母錢包 ID (若為子錢包才填寫)")
 
 class WalletUpdateParentItem(BaseModel):
     parent_id: Optional[int] = Field(None, description="新的母錢包 ID，解除綁定填 None")
@@ -60,10 +60,10 @@ class WalletUpdateParentItem(BaseModel):
 # ==========================================
 
 def get_db_connection():
-    """建立資料庫連線，並強制啟用 SQLite 的外鍵約束"""
+    """建立資料庫連線"""
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row  # 讓查詢結果可以用欄位名稱讀取
-    conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA foreign_keys = ON;") # 啟用 SQLite 的外鍵
     return conn
 
 @app.on_event("startup")
@@ -72,7 +72,7 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # 建立錢包表 (升級版：支援 parent_id 實作母子架構、is_archived 實作封存)
+    # 建立錢包表 (支援 parent_id 實作母子架構、is_archived 實作封存)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS wallets (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,21 +129,17 @@ def init_db():
     if cursor.fetchone()[0] == 0:
         # 先建立虛擬的母錢包群組 (類型通常跟著子錢包，這裡可用 bank 或建一個通用概念)
         cursor.execute("INSERT INTO wallets (name, type, balance) VALUES (?, ?, ?);", ("KGI", "bank", 0))
-        fubon_parent_id = cursor.lastrowid
-        
-        cursor.execute("INSERT INTO wallets (name, type, balance) VALUES (?, ?, ?);", ("生活開銷群組", "cash", 0))
-        life_parent_id = cursor.lastrowid
+        parent_id_1 = cursor.lastrowid
 
         # 塞入實際的子錢包與獨立錢包
         cursor.executemany("""
             INSERT INTO wallets (name, type, balance, parent_id) VALUES (?, ?, ?, ?);
         """, [
-            ("交割", "bank", 0, fubon_parent_id),
-            ("STOCK", "bank", 0, fubon_parent_id)
+            ("交割", "bank", 0, parent_id_1),
+            ("STOCK", "bank", 0, parent_id_1)
         
         ])
             # ("個人皮夾", "cash", 4766, life_parent_id),
-            # ("iPass Money", "cash", 0, life_parent_id),
             # ("國泰信用卡", "credit_card", 0, None),  # 獨立錢包，無母錢包
             # ("保險分期", "loan", -40000, None)
     
@@ -160,9 +156,7 @@ def get_wallets():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # 💡 核心修正：不再直接讀取 w.balance，而是用 SQL 即時去 records 明細表算出來！
-    # 錢包最新餘額 = 初始餘額 (w.balance) + 流入的總額 (to_wallet) - 流出的總額 (from_wallet)
-    # 註：如果你的錢包初始餘額欄位叫 initial_balance，請把下面的 w.balance 改成 w.initial_balance
+    # 即時取得錢包資料
     sql_query = """
     SELECT 
         w.id, 
@@ -183,7 +177,7 @@ def get_wallets():
     # 建立索引對照
     wallet_dict = {w["id"]: w for w in all_wallets}
     
-    # 動態計算：初始化母錢包的加總金額
+    # 初始化母錢包的加總金額
     parent_balances = {}
     total_sys_balance = 0 # 頂部看板的資產總金額
     
@@ -196,7 +190,7 @@ def get_wallets():
                 parent_balances[p_id] = 0
             parent_balances[p_id] += w["balance"]
             
-    # 將計算出的母錢包聚合總額，塞回資料中方便前端直接渲染
+    # 塞回母錢包合併計算總額
     for w in all_wallets:
         if w["id"] in parent_balances:
             w["aggregated_balance"] = parent_balances[w["id"]]
@@ -408,7 +402,7 @@ def bulk_save_records(items: List[BulkRecordItem]):
 
 
 # ==========================================
-# 5. Excel (CSV 格式) 匯入/匯出與批量測試端點
+# 5. Excel (xlsx 格式) 匯入/匯出與批量測試端點
 # ==========================================
 
 @app.get("/api/records/export-excel", summary="將現有的未對帳明細匯出為真正的 Excel (.xlsx) 檔案")
